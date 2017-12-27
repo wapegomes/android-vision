@@ -537,7 +537,10 @@ public class CameraSource {
 
         Camera.Parameters parameters = camera.getParameters();
 
-        parameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
+        if (pictureSize != null) {
+            parameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
+        }
+
         parameters.setPreviewSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
         parameters.setPreviewFpsRange(
                 previewFpsRange[Camera.Parameters.PREVIEW_FPS_MIN_INDEX],
@@ -556,11 +559,13 @@ public class CameraSource {
         }
 
         if (mFlashMode != null) {
-            if (parameters.getSupportedFlashModes().contains(
-                    mFlashMode)) {
-                parameters.setFlashMode(mFlashMode);
-            } else {
-                Log.i(TAG, "Camera flash mode: " + mFlashMode + " is not supported on this device.");
+            if (parameters.getSupportedFlashModes() != null) {
+                if (parameters.getSupportedFlashModes().contains(
+                        mFlashMode)) {
+                    parameters.setFlashMode(mFlashMode);
+                } else {
+                    Log.i(TAG, "Camera flash mode: " + mFlashMode + " is not supported on this device.");
+                }
             }
         }
 
@@ -645,7 +650,9 @@ public class CameraSource {
         public SizePair(Camera.Size previewSize,
                         Camera.Size pictureSize) {
             mPreview = new Size(previewSize.width, previewSize.height);
-            mPicture = new Size(pictureSize.width, pictureSize.height);
+            if (pictureSize != null) {
+                mPicture = new Size(pictureSize.width, pictureSize.height);
+            }
         }
 
         public Size previewSize() {
@@ -772,7 +779,7 @@ public class CameraSource {
         int displayAngle;
         if (cameraInfo.facing == CameraInfo.CAMERA_FACING_FRONT) {
             angle = (cameraInfo.orientation + degrees) % 360;
-            displayAngle = (360 - angle); // compensate for it being mirrored
+            displayAngle = (360 - angle) % 360; // compensate for it being mirrored
         } else {  // back-facing
             angle = (cameraInfo.orientation - degrees + 360) % 360;
             displayAngle = angle;
@@ -888,6 +895,13 @@ public class CameraSource {
                     mPendingFrameData = null;
                 }
 
+                if (!mBytesToByteBuffer.containsKey(data)) {
+                    Log.d(TAG,
+                        "Skipping frame.  Could not find ByteBuffer associated with the image " +
+                        "data from the camera.");
+                    return;
+                }
+
                 // Timestamp and frame ID are maintained here, which will give downstream code some
                 // idea of the timing of frames received and when frames were dropped along the way.
                 mPendingTimeMillis = SystemClock.elapsedRealtime() - mStartTimeMillis;
@@ -920,7 +934,7 @@ public class CameraSource {
 
             while (true) {
                 synchronized (mLock) {
-                    if (mActive && (mPendingFrameData == null)) {
+                    while (mActive && (mPendingFrameData == null)) {
                         try {
                             // Wait for the next frame to be received from the camera, since we
                             // don't have it yet.
